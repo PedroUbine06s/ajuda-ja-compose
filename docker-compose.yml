@@ -1,33 +1,27 @@
+version: "3.9"
+
 services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
-    environment:
-      - NODE_ENV=development
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USERNAME=nestuser
-      - DB_PASSWORD=nestpass
-      - DB_DATABASE=nestdb
+    env_file:
+      - .env
     depends_on:
       - postgres
-    volumes:
-      - .:/app
-      - /app/node_modules
     networks:
       - app-network
-
+      
   postgres:
     image: postgres:15-alpine
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: nestuser
-      POSTGRES_PASSWORD: nestpass
-      POSTGRES_DB: nestdb
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
