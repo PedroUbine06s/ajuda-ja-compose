@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { EntityManager, Point, Repository } from 'typeorm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from 'src/entities/user.entity';
@@ -71,5 +71,52 @@ export class UsersService {
       .findOne({ where: { id: userId }, relations: ['providerProfile', 'providerProfile.services'] });
     if (!userWithFullProfile) throw new NotFoundException(`Usuário não encontrado`);
     return userWithFullProfile;
+  }
+
+
+  async findNearbyProviders(
+    latitude: number,
+    longitude: number,
+    radiusInMeters: number, 
+  ): Promise<User[]> {
+    const userLocation: Point = {
+      type: 'Point',
+      coordinates: [longitude, latitude],
+    };
+
+    try {
+    return this.usersRepository.createQueryBuilder('user')
+      .where('user.userType = :userType', { userType: 'PROVIDER' })
+      .andWhere('user.location IS NOT NULL') 
+      .andWhere(
+        'ST_DWithin(user.location, ST_SetSRID(ST_GeomFromGeoJSON(:userLocation), 4326), :radius)',
+        { userLocation: JSON.stringify(userLocation), radius: radiusInMeters }
+      )
+      .orderBy(
+        'ST_Distance(user.location, ST_SetSRID(ST_GeomFromGeoJSON(:userLocation), 4326))',
+        'ASC'
+      )
+      .setParameters({ userLocation: JSON.stringify(userLocation), radius: radiusInMeters })
+      .getMany();
+    } catch (error) {
+      console.error('Error finding nearby providers:', error);
+      throw new NotFoundException('Erro ao buscar prestadores de serviços próximos');
+    }
+  }
+
+  async updateUserLocation(
+    userId: number,
+    latitude: number,
+    longitude: number
+  ): Promise<User> {
+    const user = await this.getUser(userId);
+
+    const locationPoint: Point = {
+      type: 'Point',
+      coordinates: [longitude, latitude],
+    };
+
+    user.location = locationPoint;
+    return this.usersRepository.save(user);
   }
 }
