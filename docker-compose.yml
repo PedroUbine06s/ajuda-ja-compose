@@ -1,20 +1,20 @@
 
 services:
-  # app:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "3000:3000"
-  #   env_file:
-  #     - .env
-  #   depends_on:
-  #     - postgres
-  #   networks:
-  #     - app-network
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    networks:
+      - app-network
       
   postgres:
-    image: postgis/postgis:15-3.4 
+    image: postgres:15-alpine
     ports:
       - "5432:5432"
     environment:
