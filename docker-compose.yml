@@ -14,7 +14,7 @@ services:
       - app-network
       
   postgres:
-    image: postgres:15-alpine
+    image: postgis/postgis:15-3.4
     ports:
       - "5432:5432"
     environment:
