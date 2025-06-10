@@ -1,5 +1,5 @@
-import { config } from 'dotenv';
-import { DataSource } from 'typeorm';
+import {config} from 'dotenv';
+import {DataSource} from 'typeorm';
 
 config();
 const dbPort = process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432;
