@@ -1,86 +1,90 @@
-// src/modules/service-requests/service-requests.service.ts
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { ServiceRequest, ServiceRequestStatus } from '../../entities/service-request.entity';
-import { Service } from '../../entities/service.entity';
-import { CreateServiceRequestDto } from './dto/create-service-request.dto';
-import { UsersService } from '../users/users.service'; 
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import {InjectRepository} from '@nestjs/typeorm';
+import {Repository} from 'typeorm';
+import {ServiceRequest} from '../../entities/service-request.entity';
+import {CreateServiceRequestDto} from './dto/create-service-request.dto';
+import {UsersService} from '../users/users.service';
 
 @Injectable()
 export class ServiceRequestsService {
   constructor(
     @InjectRepository(ServiceRequest)
     private serviceRequestRepository: Repository<ServiceRequest>,
-    @InjectRepository(Service)
-    private serviceRepository: Repository<Service>,
     private readonly usersService: UsersService,
   ) {}
 
-  async createServiceRequest(commonUserId: number, createServiceRequestDto: CreateServiceRequestDto): Promise<ServiceRequest> {
-    const { serviceProviderId, serviceId, description, scheduledDate } = createServiceRequestDto;
+  async createServiceRequest(
+    commonUserId: number,
+    createServiceRequestDto: CreateServiceRequestDto,
+  ): Promise<ServiceRequest> {
+    const {serviceProviderId} = createServiceRequestDto;
 
     const commonUser = await this.usersService.getUser(commonUserId);
     if (!commonUser || commonUser.userType !== 'COMMON') {
-      throw new UnauthorizedException('Only common users can create service requests.');
+      throw new UnauthorizedException(
+        'Apenas usuários comuns podem criar solicitações de serviço.',
+      );
     }
 
-    const serviceProviderUser = await this.usersService.getUserWithFullProfile(serviceProviderId);
-    if (!serviceProviderUser || serviceProviderUser.userType !== 'PROVIDER' || !serviceProviderUser.providerProfile) {
-      throw new NotFoundException('Service provider not found or is not a provider.');
-    }
-
-    const service = await this.serviceRepository.findOne({ where: { id: serviceId } });
-    if (!service) {
-      throw new NotFoundException('Service not found.');
-    }
-
-    const offersService = serviceProviderUser.providerProfile.services.some(s => s.id === service.id);
-    if (!offersService) {
-      throw new BadRequestException('Service provider does not offer this service.');
+    const serviceProviderUser =
+      await this.usersService.getUserWithFullProfile(serviceProviderId);
+    if (
+      !serviceProviderUser ||
+      serviceProviderUser.userType !== 'PROVIDER' ||
+      !serviceProviderUser.providerProfile
+    ) {
+      throw new NotFoundException(
+        'Provedor de serviços não encontrado ou não possui perfil de provedor.',
+      );
     }
 
     const serviceRequest = this.serviceRequestRepository.create({
       commonUser: commonUser,
       serviceProvider: serviceProviderUser,
-      service: service,
-      description,
-      scheduledDate: scheduledDate ? new Date(scheduledDate) : undefined,
-      status: ServiceRequestStatus.PENDING,
     });
 
     return this.serviceRequestRepository.save(serviceRequest);
   }
 
-  async getServiceRequestsForCommonUser(userId: number): Promise<ServiceRequest[]> {
+  async getServiceRequestsForCommonUser(
+    userId: number,
+  ): Promise<ServiceRequest[]> {
     return this.serviceRequestRepository.find({
-      where: { commonUser: { id: userId } },
-      relations: ['serviceProvider', 'service'],
-    });
-  }
-
-  async getServiceRequestsForProvider(userId: number): Promise<ServiceRequest[]> {
-    return this.serviceRequestRepository.find({
-      where: { serviceProvider: { id: userId } },
-      relations: ['commonUser', 'service'],
-    });
-  }
-
-  async updateServiceRequestStatus(requestId: number, providerId: number, status: ServiceRequestStatus): Promise<ServiceRequest> {
-    const serviceRequest = await this.serviceRequestRepository.findOne({
-      where: { id: requestId },
+      where: {commonUser: {id: userId}},
       relations: ['serviceProvider'],
     });
+  }
 
-    if (!serviceRequest) {
-      throw new NotFoundException('Service request not found.');
+  async getServiceRequestsForProvider(
+    userId: number,
+  ): Promise<ServiceRequest[]> {
+    const allRequests = await this.serviceRequestRepository.find({
+      where: {serviceProvider: {id: userId}},
+      relations: ['commonUser'],
+      order: {
+        requestDate: 'DESC',
+      },
+    });
+
+    const latestRequestsMap = new Map<number, ServiceRequest>();
+
+    for (const request of allRequests) {
+      const commonUserId = request.commonUser.id;
+      if (!latestRequestsMap.has(commonUserId)) {
+        latestRequestsMap.set(commonUserId, request);
+      }
     }
 
-    if (serviceRequest.serviceProvider.id !== providerId) {
-      throw new UnauthorizedException('You are not authorized to update this service request.');
-    }
+    const latestRequestsArray = Array.from(latestRequestsMap.values());
 
-    serviceRequest.status = status;
-    return this.serviceRequestRepository.save(serviceRequest);
+    latestRequestsArray.sort(
+      (a, b) => b.requestDate.getTime() - a.requestDate.getTime(),
+    );
+
+    return latestRequestsArray;
   }
 }

@@ -89,6 +89,8 @@ export class UsersService {
     try {
       return this.usersRepository
         .createQueryBuilder('user')
+        .leftJoinAndSelect('user.providerProfile', 'providerProfile')
+        .leftJoinAndSelect('providerProfile.services', 'services')
         .where('user.userType = :userType', {userType: 'PROVIDER'})
         .andWhere('user.location IS NOT NULL')
         .andWhere(
